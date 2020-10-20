@@ -1,0 +1,165 @@
+<style>
+board {
+  display: flex;
+  flex-direction: column;
+}
+row {
+  display: flex;
+  flex-direction: row;
+}
+node {
+  display: block;
+  border: 1px gray solid;
+  width: 20px;
+  height: 20px;
+  background-color: white;
+}
+node.alive {
+  background-color: black;
+}
+</style>
+<script>
+  const isAlive = (node) => node.classList.contains('alive');
+  const shouldStayAlive = (node) =>
+    isAlive(node) &&
+    (node.liveNeighborCount === 2 || node.liveNeighborCount === 3);
+  const shouldBecomeAlive = (node) => node.liveNeighborCount === 3;
+  const sameLiveNodes = (a, b) => {
+    for (let rowIdx = 0; rowIdx < a.children.length; rowIdx++) {
+      for (let colIdx = 0; colIdx < a.children[0].children.length; colIdx++) {
+        if (
+          isAlive(a.children[rowIdx].children[colIdx]) !==
+          isAlive(b.children[rowIdx].children[colIdx])
+        ) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+  const forEachNode = (boardEl, cb) => {
+    for (let rowIdx = 0; rowIdx < boardEl.children.length; rowIdx++) {
+      const rowEl = boardEl.children[rowIdx];
+      for (let colIdx = 0; colIdx < rowEl.children.length; colIdx++) {
+        const node = rowEl.children[colIdx];
+        cb(node, rowIdx, colIdx);
+      }
+    }
+  };
+  const forEachNeighbor = (boardEl, row, col, cb) => {
+    const rows = boardEl.children.length;
+    const cols =
+      boardEl.children.length > 0 ?
+      boardEl.children[0].children.length :
+      0;
+    for (const rowDiff of [-1, 0, 1]) {
+      for (const colDiff of [-1, 0, 1]) {
+        if (rowDiff === 0 && colDiff === 0) continue;
+        const maybeNeighborRow = row + rowDiff;
+        const maybeNeighborCol = col + colDiff;
+        const rowIsValid = maybeNeighborRow >= 0 && maybeNeighborRow < rows;
+        const colIsValid = maybeNeighborCol >= 0 && maybeNeighborCol < cols;
+        if (rowIsValid && colIsValid) {
+          cb(boardEl.children[maybeNeighborRow].children[maybeNeighborCol]);
+        }
+      }
+    }
+  };
+
+  const getNextBoard = (boardEl) => {
+    const nextBoardEl = boardEl.cloneNode(/* deep= */ true);
+    forEachNode(nextBoardEl, (node) => {
+      node.liveNeighborCount = 0;
+    });
+    forEachNode(nextBoardEl, (node, row, col) => {
+      if (isAlive(node)) {
+        forEachNeighbor(nextBoardEl, row, col, (neighbor) => {
+          neighbor.liveNeighborCount++;
+        });
+      }
+    });
+    forEachNode(nextBoardEl, (node) => {
+      if (shouldBecomeAlive(node) || shouldStayAlive(node)) {
+        node.classList.add('alive');
+      } else {
+        node.classList.remove('alive');
+      }
+    });
+    return nextBoardEl;
+  };
+
+  const addNodeClickListeners = (doc) => {
+    for (const node of doc.getElementsByTagName('node')) {
+      node.addEventListener('click', toggleAlive);
+    }
+  };
+  const createNode = (doc) => doc.createElement('node')
+  const createRow = (cols, doc) => {
+    const row = doc.createElement('row');
+    for (let i = 0; i < cols; i++) {
+      row.appendChild(createNode(doc));
+    }
+    return row;
+  };
+  const createBoard = (rows, cols, doc) => {
+    const board = doc.createElement('board');
+    for (let i = 0; i < rows; i++) {
+      board.appendChild(createRow(cols, doc));
+    }
+    return board;
+  };
+  const resetBoard = (rows, cols, doc) => {
+    const container = doc.getElementById('boardContainer');
+    container.innerText = '';
+    container.appendChild(createBoard(rows, cols, doc));
+    addNodeClickListeners(doc);
+  };
+  const processResetForm = (form) => {
+    const data = new FormData(form);
+    resetBoard(
+      Number(data.get('rowsInput')),
+      Number(data.get('colsInput')),
+      document);
+    return false;
+  };
+  const toggleAlive = (event) => {
+    const node = event.target;
+    if (isAlive(node)) {
+      node.classList.remove('alive');
+    } else {
+      node.classList.add('alive');
+    }
+  };
+  window.addEventListener('load', () => void resetBoard(30, 30, document));
+  const nextStep = () => {
+    const container = document.getElementById('boardContainer');
+    const board = container.children[0];
+    const nextBoard = getNextBoard(board);
+    container.removeChild(board);
+    container.appendChild(getNextBoard(board));
+    addNodeClickListeners(document);
+  };
+  const start = () => {
+    const container = document.getElementById('boardContainer');
+    let prevBoard = container.children[0];
+    const nextStepAndRepeat = () => {
+      nextStep();
+      const newBoard = container.children[0];
+      if (!sameLiveNodes(prevBoard, newBoard)) {
+        setTimeout(nextStepAndRepeat, 0);
+        prevBoard = newBoard;
+      }
+    };
+    nextStepAndRepeat();
+  };
+</script>
+<form id="resetBoardForm" onsubmit="return processResetForm(this)">
+  <label for="rowsInput">Rows</label>
+  <input type="number" name="rowsInput" min=1 step=1 value=30>
+  <label for="colsInput">Columns</label>
+  <input type="number" name="colsInput" min=1 step=1 value=30>
+  <button>Reset board</button>
+</form>
+<button onclick="nextStep()">Next step</button>
+<button onclick="start()">Start</button>
+<div id="boardContainer"></div>
